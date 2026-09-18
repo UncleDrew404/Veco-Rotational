@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+db.sqlite3
+
+#Enviroment
+.env/
+.venv/
+
+#AI Agents
+.codex/
