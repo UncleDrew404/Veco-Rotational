@@ -1,2 +1,8 @@
-#AI Agents
+# Local environment files (safety net for every project directory)
+.env
+.env.*
+!.env.example
+
+# AI agents
 .codex/
+.kilo/
