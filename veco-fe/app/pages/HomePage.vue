@@ -1,5 +1,5 @@
 <template>
-    <div class="text-black">Maintenance</div>
+    <div>Maintenance</div>
 </template>
 
 <script setup>
