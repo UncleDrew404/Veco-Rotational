@@ -5,7 +5,7 @@ node_modules/
 .data/
 dist/
 
-.env
+.env/
 .env.*
 !.env.example
 
