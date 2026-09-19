@@ -1,0 +1,12 @@
+# veco-fe/.gitignore
+node_modules/
+.nuxt/
+.output/
+.data/
+dist/
+
+.env
+.env.*
+!.env.example
+
+npm-debug.log*
