@@ -1,170 +1,262 @@
 <template>
-  <section>
-    <div class="mb-8 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+  <section aria-labelledby="schedule-title" class=" px-4 py-8 sm:px-6 lg:px-8 lg:py-10">
+    <header class="mb-6 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <h1 class="max-w-3xl text-3xl font-black tracking-tight text-slate-950 sm:text-4xl">
+        <h1 id="schedule-title" class="mt-1 text-3xl font-extrabold tracking-tight text-stone-950 sm:text-4xl">
           Interruptions Schedule
         </h1>
+        <p class="mt-2 max-w-2xl text-base leading-7 text-stone-600">
+          Scheduled maintenance and rotational brownouts. Search for your barangay or street,
+          or pick a date to check whether your area is affected.
+        </p>
       </div>
 
+      <div class="flex shrink-0 flex-col gap-2 sm:items-end">
+        <button
+          type="button"
+          :disabled="isRefreshing"
+          :aria-busy="isRefreshing"
+          class="inline-flex min-h-11 w-fit items-center justify-center gap-2 rounded-full bg-stone-900 px-5 text-sm font-bold text-white shadow-sm transition-colors duration-200 hover:bg-stone-700 disabled:cursor-wait disabled:opacity-70"
+          @click="refreshSchedule"
+        >
+          <AppIcon name="refresh" :size="16" :class="{ 'animate-spin': isRefreshing }" />
+          {{ isRefreshing ? 'Refreshing…' : 'Refresh schedule' }}
+        </button>
+        <p v-if="updatedLabel" class="text-xs text-stone-600">
+          Last updated {{ updatedLabel }}
+        </p>
+      </div>
+    </header>
+
+    <div
+      v-if="errorMessage && items.length"
+      role="alert"
+      class="mb-6 flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-amber-950 sm:flex-row sm:items-center sm:justify-between"
+    >
+      <p class="flex items-start gap-2 text-sm">
+        <AppIcon name="alert" class="mt-0.5 text-amber-700" />
+        <span>
+          <strong class="font-bold">Couldn't refresh the schedule.</strong>
+          Showing the last loaded results.
+        </span>
+      </p>
       <button
         type="button"
         :disabled="isRefreshing"
-        class="inline-flex w-fit items-center justify-center rounded-full bg-blue-700 px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-blue-800 disabled:cursor-wait disabled:opacity-60"
+        class="inline-flex min-h-11 w-fit shrink-0 items-center rounded-full px-4 text-sm font-bold text-amber-950 ring-1 ring-inset ring-amber-400 transition-colors duration-200 hover:bg-amber-100 disabled:cursor-wait disabled:opacity-70"
         @click="refreshSchedule"
       >
-        {{ isRefreshing ? 'Refreshing…' : 'Refresh schedule' }}
+        Try again
       </button>
     </div>
 
-    <div class="mb-8 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-      <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-        <div class="grid gap-5 sm:grid-cols-2">
-          <label class="grid gap-2 text-sm font-bold text-slate-700">
-            Search Interruptions
+    <form
+      role="search"
+      aria-label="Filter interruptions"
+      class="mb-6 rounded-2xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5"
+      @submit.prevent
+    >
+      <div class="grid gap-4 md:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+        <div class="grid gap-2">
+          <label for="interruption-search" class="text-sm font-bold text-stone-800">Search</label>
+          <div class="relative">
+            <AppIcon
+              name="search"
+              class="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-500"
+            />
             <input
+              id="interruption-search"
+              ref="searchInput"
               v-model="filters.search"
               type="search"
-              placeholder="Search area, purpose, or time"
-              class="h-11 rounded-xl border border-slate-300 bg-white px-4 font-normal text-slate-950 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+              autocomplete="off"
+              enterkeyhint="search"
+              placeholder="Barangay, street, or purpose"
+              class="h-12 w-full rounded-xl border border-stone-300 bg-white pl-11 pr-12 text-base text-stone-950 outline-none transition-colors duration-200 placeholder:text-stone-500 focus:border-amber-700 focus:ring-4 focus:ring-amber-200 [&::-webkit-search-cancel-button]:hidden"
             >
-          </label>
-
-          <label class="grid gap-2 text-sm font-bold text-slate-700">
-            Date
-            <input
-              v-model="filters.date"
-              type="date"
-              class="h-11 rounded-xl border border-slate-300 bg-white px-4 font-normal text-slate-950 outline-none transition focus:border-blue-600 focus:ring-4 focus:ring-blue-100"
+            <button
+              v-if="filters.search"
+              type="button"
+              aria-label="Clear search"
+              class="absolute right-1 top-1/2 inline-flex size-10 -translate-y-1/2 items-center justify-center rounded-lg text-stone-500 transition-colors duration-200 hover:bg-stone-100 hover:text-stone-900"
+              @click="clearSearch"
             >
-          </label>
+              <AppIcon name="x" :size="16" />
+            </button>
+          </div>
         </div>
 
+        <div class="grid gap-2">
+          <div class="flex items-center justify-between gap-2">
+            <label for="interruption-date" class="text-sm font-bold text-stone-800">Date</label>
+            <button
+              v-if="filters.date !== todayKey"
+              type="button"
+              class="-my-3 inline-flex min-h-11 items-center px-1 text-sm font-semibold text-amber-800 underline-offset-4 hover:text-amber-950 hover:underline"
+              @click="filters.date = todayKey"
+            >
+              Jump to today
+            </button>
+          </div>
+          <input
+            id="interruption-date"
+            v-model="filters.date"
+            type="date"
+            class="h-12 w-full rounded-xl border border-stone-300 bg-white px-4 text-base text-stone-950 outline-none transition-colors duration-200 focus:border-amber-700 focus:ring-4 focus:ring-amber-200"
+          >
+        </div>
+      </div>
+
+      <fieldset class="mt-4 border-t border-stone-100 pt-4">
+        <legend class="sr-only">Interruption type</legend>
+        <div class="flex flex-wrap items-center gap-2">
+          <span class="mr-1 text-sm font-bold text-stone-800" aria-hidden="true">Type</span>
+          <button
+            v-for="option in categoryOptions"
+            :key="option.value"
+            type="button"
+            class="inline-flex min-h-11 items-center gap-2 rounded-full px-4 text-sm font-semibold ring-1 ring-inset transition-colors duration-200"
+            :class="
+              filters.category === option.value
+                ? 'bg-stone-900 text-white ring-stone-900'
+                : 'bg-white text-stone-700 ring-stone-300 hover:bg-stone-100 hover:text-stone-950'
+            "
+            :aria-pressed="filters.category === option.value"
+            @click="filters.category = option.value"
+          >
+            {{ option.label }}
+            <span
+              v-if="items.length"
+              class="rounded-full px-2 py-0.5 text-xs font-bold tabular-nums"
+              :class="filters.category === option.value ? 'bg-white/15 text-white' : 'bg-stone-100 text-stone-700'"
+            >
+              {{ categoryCounts[option.value] }}
+            </span>
+          </button>
+
+          <button
+            v-if="hasActiveFilters"
+            type="button"
+            class="inline-flex min-h-11 items-center gap-1.5 rounded-full px-4 text-sm font-semibold text-stone-700 transition-colors duration-200 hover:bg-stone-100 hover:text-stone-950 sm:ml-auto"
+            @click="interruptionsStore.resetFilters"
+          >
+            <AppIcon name="x" :size="16" />
+            Clear filters
+          </button>
+        </div>
+      </fieldset>
+    </form>
+
+    <p class="sr-only" aria-live="polite">{{ liveSummary }}</p>
+
+    <div
+      v-if="isInitialLoading"
+      class="grid gap-4 lg:grid-cols-2"
+      role="status"
+    >
+      <span class="sr-only">Loading VECO's latest schedule…</span>
+      <CardSkeleton v-for="index in 4" :key="index" />
+    </div>
+
+    <div
+      v-else-if="errorMessage && !items.length"
+      role="alert"
+      class="flex flex-col items-start gap-4 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-900"
+    >
+      <div class="flex items-start gap-3">
+        <AppIcon name="alert" :size="24" class="mt-0.5 text-red-700" />
+        <div>
+          <h2 class="font-bold">We couldn't load the interruption schedule.</h2>
+          <p class="mt-1 text-sm text-red-800">{{ errorMessage }} Check your connection and try again.</p>
+        </div>
+      </div>
+      <button
+        type="button"
+        :disabled="isRefreshing"
+        class="inline-flex min-h-11 items-center gap-2 rounded-full bg-red-700 px-5 text-sm font-bold text-white transition-colors duration-200 hover:bg-red-800 disabled:cursor-wait disabled:opacity-70"
+        @click="refreshSchedule"
+      >
+        <AppIcon name="refresh" :size="16" :class="{ 'animate-spin': isRefreshing }" />
+        {{ isRefreshing ? 'Retrying…' : 'Try again' }}
+      </button>
+    </div>
+
+    <div
+      v-else-if="!items.length"
+      class="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-900"
+    >
+      <AppIcon name="check" :size="24" class="mt-0.5 text-emerald-700" />
+      <div>
+        <h2 class="font-bold">No service interruptions are listed right now.</h2>
+        <p class="mt-1 text-sm text-emerald-800">VECO hasn't posted any scheduled interruptions. Check back later.</p>
+      </div>
+    </div>
+
+    <template v-else>
+      <p class="mb-4 text-sm text-stone-600">
+        Showing <span class="font-bold text-stone-900">{{ filteredItems.length }}</span>
+        of {{ items.length }} interruptions<template v-if="groupedItems.length > 1">
+          across {{ groupedItems.length }} days</template>
+      </p>
+
+      <div
+        v-if="!filteredItems.length"
+        class="rounded-2xl border border-dashed border-stone-300 bg-white px-6 py-10 text-center"
+      >
+        <AppIcon name="search" :size="32" class="mx-auto text-stone-400" />
+        <h2 class="mt-3 font-bold text-stone-900">No interruptions match your filters</h2>
+        <p class="mt-1 text-sm text-stone-600">
+          Try a different spelling, another date, or a broader type.
+        </p>
         <button
-          v-if="hasActiveFilters"
           type="button"
-          class="h-11 w-fit rounded-xl border border-slate-300 px-4 text-sm font-bold text-slate-700 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800"
+          class="mt-4 inline-flex min-h-11 items-center rounded-full bg-stone-900 px-5 text-sm font-bold text-white transition-colors duration-200 hover:bg-stone-700"
           @click="interruptionsStore.resetFilters"
         >
           Clear filters
         </button>
       </div>
 
-      <fieldset class="mt-5 border-t border-slate-100 pt-5">
-        <legend class="sr-only">Interruption type</legend>
-        <div class="flex flex-wrap gap-2">
-          <button
-            v-for="option in categoryOptions"
-            :key="option.value"
-            type="button"
-            class="rounded-full px-4 py-2 text-sm font-bold transition ring-1 ring-inset"
-            :class="
-              filters.category === option.value
-                ? 'bg-blue-700 text-white ring-blue-700'
-                : 'bg-slate-50 text-slate-700 ring-slate-200 hover:bg-blue-50 hover:text-blue-800 hover:ring-blue-200'
-            "
-            :aria-pressed="filters.category === option.value"
-            @click="filters.category = option.value"
+      <div v-else class="grid gap-8">
+        <template v-for="section in daySections" :key="section.key">
+          <div
+            v-if="section.divider"
+            class="flex items-center gap-3 pt-2 text-sm font-bold uppercase tracking-wide text-stone-600"
           >
-            {{ option.label }}
-          </button>
-        </div>
-      </fieldset>
-    </div>
+            <span class="h-px flex-1 bg-stone-200" aria-hidden="true" />
+            {{ section.divider }}
+            <span class="h-px flex-1 bg-stone-200" aria-hidden="true" />
+          </div>
 
-    <div
-      v-if="status === 'pending' && items.length === 0"
-      class="grid gap-5 md:grid-cols-2 xl:grid-cols-3"
-      role="status"
-      aria-live="polite"
-    >
-      <span class="sr-only">Loading VECO’s latest schedule…</span>
-      <CardSkeleton v-for="index in 6" :key="index" />
-    </div>
-
-    <div
-      v-else-if="errorMessage && items.length === 0"
-      class="grid gap-1 rounded-2xl border border-red-200 bg-red-50 p-6 text-red-800 shadow-sm"
-    >
-      <strong>Unable to load the interruption calendar.</strong>
-      <span>{{ errorMessage }}</span>
-    </div>
-
-    <div
-      v-else-if="items.length === 0"
-      class="rounded-2xl border border-slate-200 bg-white p-6 text-slate-600 shadow-sm"
-    >
-      No service interruptions are currently listed.
-    </div>
-
-    <div
-      v-else-if="filteredItems.length === 0"
-      class="rounded-2xl border border-slate-200 bg-white p-6 text-slate-600 shadow-sm"
-    >
-      <p class="font-bold text-slate-900">No interruptions match these filters.</p>
-      <button
-        type="button"
-        class="mt-3 text-sm font-bold text-blue-700 hover:text-blue-900 hover:underline"
-        @click="interruptionsStore.resetFilters"
-      >
-        Clear filters
-      </button>
-    </div>
-
-    <template v-else>
-      <p class="mb-4 text-sm font-semibold text-slate-600">
-        Showing {{ filteredItems.length }} of {{ items.length }} interruptions
-      </p>
-
-      <!-- CARDS -->
-      <div class="grid gap-5 " aria-label="Filtered interruption schedule">
-        <article
-          v-for="interruption in filteredItems"
-          :key="`${interruption.source_id}-${interruption.date_start}-${interruption.time}-${interruption.areas_affected}`"
-          class="flex flex-col gap-5 rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-        >
-          <div class="flex items-center justify-between gap-3">
-            <span
-              class="rounded-full px-2.5 py-1 text-xs font-extrabold uppercase tracking-wide ring-1 ring-inset"
-              :class="badgeClass(interruption.status)"
+          <section
+            v-for="group in section.groups"
+            :key="group.date"
+            :aria-labelledby="`day-${group.date}`"
+          >
+            <h2
+              :id="`day-${group.date}`"
+              class="sticky top-16 z-10 -mx-2 mb-3 flex flex-wrap items-center gap-2 bg-stone-50/95 px-2 py-2 text-base font-bold text-stone-900 backdrop-blur"
             >
-              {{ interruption.status || 'Scheduled' }}
-            </span>
-            <span class="text-xs font-extrabold uppercase tracking-wider text-blue-700">
-              {{ interruption.category }}
-            </span>
-          </div>
+              <AppIcon name="calendar" class="text-amber-700" />
+              {{ group.label }}
+              <span
+                v-if="group.relative"
+                class="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-bold text-amber-900"
+              >
+                {{ group.relative }}
+              </span>
+              <span class="ml-auto text-sm font-medium text-stone-600">
+                {{ group.items.length }} {{ group.items.length === 1 ? 'interruption' : 'interruptions' }}
+              </span>
+            </h2>
 
-          <div>
-            <p class="text-sm font-extrabold text-blue-800">
-              {{ interruption.date_label }}
-            </p>
-            <p class="mt-1 text-base font-extrabold text-slate-700">
-              {{ interruption.time }}
-            </p>
-          </div>
-
-          <h2 class="text-base font-bold leading-7 text-slate-950">
-            {{ interruption.purpose }}
-          </h2>
-
-          <div class="border-t border-slate-100 pt-4">
-            <span class="text-xs font-bold uppercase tracking-wider text-slate-500">Areas affected</span>
-            <p class="mt-2 text-sm leading-6 text-slate-600">
-              {{ interruption.areas_affected }}
-            </p>
-          </div>
-
-          <a
-            v-if="interruption.map_url"
-            :href="interruption.map_url"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="mt-auto w-fit text-sm font-bold text-blue-700 hover:text-blue-900 hover:underline"
-          >
-            View outage map
-          </a>
-        </article>
+            <ul class="grid gap-4 lg:grid-cols-2">
+              <li v-for="interruption in group.items" :key="interruptionKey(interruption)">
+                <InterruptionCard :interruption="interruption" :highlight="filters.search" />
+              </li>
+            </ul>
+          </section>
+        </template>
       </div>
     </template>
   </section>
@@ -180,10 +272,19 @@ useHead({
   title: 'Interruptions Schedule',
 })
 
-const config = useRuntimeConfig()
+const route = useRoute()
+const router = useRouter()
 const interruptionsStore = useInterruptionsStore()
-const { items, filteredItems, filters, hasActiveFilters, isRefreshing, errorMessage } =
-  storeToRefs(interruptionsStore)
+const {
+  items,
+  filteredItems,
+  filters,
+  hasActiveFilters,
+  categoryCounts,
+  isRefreshing,
+  errorMessage,
+  lastFetchedAt,
+} = storeToRefs(interruptionsStore)
 
 const categoryOptions = [
   { label: 'All interruptions', value: 'all' },
@@ -191,27 +292,83 @@ const categoryOptions = [
   { label: 'Rotational Brownout', value: 'rotational' },
 ]
 
-const { data, status, error } = await useFetch('/api/v1/interruptions/', {
-  baseURL: config.public.apiBase,
-  key: 'all-interruptions',
+const searchInput = ref(null)
+const todayKey = manilaDateKey()
+
+// The URL is the source of truth for filters, so filtered views can be shared.
+applyRouteQuery(route.query)
+
+const { status } = await useAsyncData(
+  'all-interruptions',
+  () => interruptionsStore.fetchAll(),
+)
+
+const isInitialLoading = computed(() => status.value === 'pending' && items.value.length === 0)
+const updatedLabel = computed(() => formatUpdatedAt(lastFetchedAt.value))
+const groupedItems = computed(() =>
+  groupByDate(filteredItems.value).map((group) => ({
+    ...group,
+    relative: relativeDayLabel(group.date, todayKey),
+  })),
+)
+// Today and upcoming days come first; past days move under an "Earlier" divider.
+const daySections = computed(() => {
+  const current = groupedItems.value.filter((group) => group.date >= todayKey)
+  const past = groupedItems.value.filter((group) => group.date < todayKey).reverse()
+
+  return [
+    { key: 'current', divider: '', groups: current },
+    { key: 'past', divider: past.length && current.length ? 'Earlier' : '', groups: past },
+  ]
+})
+const liveSummary = computed(() => {
+  if (isInitialLoading.value || !items.value.length) return ''
+  return `Showing ${filteredItems.value.length} of ${items.value.length} interruptions.`
 })
 
-if (data.value) {
-  interruptionsStore.setResponse(data.value)
+watch(
+  filters,
+  (value) => {
+    const query = buildQuery(value)
+    if (!sameQuery(query, route.query)) router.replace({ query })
+  },
+  { deep: true },
+)
+
+watch(
+  () => route.query,
+  (query) => {
+    if (!sameQuery(buildQuery(filters.value), query)) applyRouteQuery(query)
+  },
+)
+
+function buildQuery(value) {
+  const query = {}
+  const search = value.search.trim()
+  if (search) query.q = search
+  if (value.category !== 'all') query.type = value.category
+  if (value.date) query.date = value.date
+  return query
 }
 
-if (error.value) {
-  interruptionsStore.setError(error.value?.data?.message || error.value.message)
+function sameQuery(first, second) {
+  const keys = ['q', 'type', 'date']
+  return keys.every((key) => (first[key] || '') === (second[key] || ''))
 }
 
-const statusClasses = {
-  ongoing: 'bg-red-100 text-red-700 ring-red-600/20',
-  restored: 'bg-emerald-100 text-emerald-700 ring-emerald-600/20',
-  upcoming: 'bg-amber-100 text-amber-800 ring-amber-600/20',
+function applyRouteQuery(query) {
+  const search = typeof query.q === 'string' ? query.q : ''
+  const category = categoryOptions.some((option) => option.value === query.type) ? query.type : 'all'
+  const date = isDateKey(query.date) ? query.date : ''
+
+  filters.value.search = search
+  filters.value.category = category
+  filters.value.date = date
 }
 
-function badgeClass(value) {
-  return statusClasses[value?.toLowerCase()] || 'bg-slate-100 text-slate-700 ring-slate-600/20'
+function clearSearch() {
+  filters.value.search = ''
+  searchInput.value?.focus()
 }
 
 async function refreshSchedule() {

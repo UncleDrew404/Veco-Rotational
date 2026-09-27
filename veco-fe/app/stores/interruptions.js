@@ -1,7 +1,20 @@
+const CATEGORY_MATCHERS = {
+  scheduled: (category) => category.includes('scheduled'),
+  rotational: (category) => category.includes('rotational') || category.includes('brownout'),
+}
+
+function matchesCategory(interruption, selectedCategory) {
+  if (selectedCategory === 'all') return true
+
+  const matcher = CATEGORY_MATCHERS[selectedCategory]
+  return Boolean(matcher?.(interruption.category?.toLowerCase() || ''))
+}
+
 export const useInterruptionsStore = defineStore('interruptions', {
   state: () => ({
     items: [],
     meta: null,
+    lastFetchedAt: null,
     isRefreshing: false,
     errorMessage: '',
     filters: {
@@ -18,13 +31,6 @@ export const useInterruptionsStore = defineStore('interruptions', {
       const selectedDate = state.filters.date
 
       return state.items.filter((interruption) => {
-        const category = interruption.category?.toLowerCase() || ''
-        const matchesCategory =
-          selectedCategory === 'all' ||
-          (selectedCategory === 'scheduled' && category.includes('scheduled')) ||
-          (selectedCategory === 'rotational' &&
-            (category.includes('rotational') || category.includes('brownout')))
-
         const matchesDate =
           !selectedDate ||
           (interruption.date_start <= selectedDate && interruption.date_end >= selectedDate)
@@ -41,8 +47,20 @@ export const useInterruptionsStore = defineStore('interruptions', {
           .join(' ')
           .toLowerCase()
 
-        return matchesCategory && matchesDate && (!search || searchableText.includes(search))
+        return (
+          matchesCategory(interruption, selectedCategory) &&
+          matchesDate &&
+          (!search || searchableText.includes(search))
+        )
       })
+    },
+
+    categoryCounts(state) {
+      return {
+        all: state.items.length,
+        scheduled: state.items.filter((item) => matchesCategory(item, 'scheduled')).length,
+        rotational: state.items.filter((item) => matchesCategory(item, 'rotational')).length,
+      }
     },
 
     hasActiveFilters(state) {
@@ -56,6 +74,7 @@ export const useInterruptionsStore = defineStore('interruptions', {
     setResponse(response) {
       this.items = Array.isArray(response?.data) ? response.data : []
       this.meta = response?.meta ?? null
+      this.lastFetchedAt = new Date().toISOString()
       this.errorMessage = ''
     },
 

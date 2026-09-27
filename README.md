@@ -68,7 +68,7 @@ Copy-Item veco-fe/.env.example veco-fe/.env
 The frontend uses:
 
 ```dotenv
-NUXT_PUBLIC_API_BASE=http://127.0.0.1:8000
+NUXT_PUBLIC_API_BASE=http://127.0.0.1:8080
 ```
 
 Variables prefixed with `NUXT_PUBLIC_` are included in the browser bundle and
@@ -88,7 +88,9 @@ python manage.py check
 python manage.py runserver
 ```
 
-The API runs at `http://127.0.0.1:8000` by default.
+This project defaults Django's development server to `http://127.0.0.1:8080`.
+You can still override it explicitly, for example with
+`python manage.py runserver 9000`.
 
 ## Frontend setup
 
